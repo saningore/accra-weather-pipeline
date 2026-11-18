@@ -14,8 +14,8 @@ wheels/
 .env.*
 !.env.example
 
-# Data produced by the pipeline
-data/
+# Data produced by the pipeline (local only; packaged fixtures under src/ stay tracked)
+/data/
 *.sqlite3
 
 # Editor / OS
