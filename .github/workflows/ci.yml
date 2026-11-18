@@ -19,8 +19,11 @@ jobs:
           persist-credentials: false
       - name: Check that local environment files are untracked
         run: |
-          if git ls-files | grep -E '^\.env(\.|$)'; then
-            echo "Tracked .env files are not allowed." >&2
+          # Allow .env.example (placeholders only). Ban .env and other .env.* files.
+          tracked="$(git ls-files | grep -E '^\.env(\.|$)' | grep -vE '^\.env\.example$' || true)"
+          if [ -n "$tracked" ]; then
+            echo "Tracked .env files are not allowed:" >&2
+            echo "$tracked" >&2
             exit 1
           fi
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
