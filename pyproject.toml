@@ -1,0 +1,38 @@
+[project]
+name = "accra-weather-pipeline"
+version = "0.1.0"
+description = "Daily Open-Meteo weather for Accra and Kumasi: Bronze → Silver → Gold, orchestrated with Prefect."
+readme = "README.md"
+authors = [
+    { name = "Sam Aningore", email = "sam.aningore@bistasol.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "polars>=2.1.0",
+    "prefect>=3.9.3",
+    "psycopg[binary]>=3.3.9",
+    "python-dotenv>=1.2.4",
+]
+
+[project.scripts]
+accra-weather-pipeline = "accra_weather_pipeline.flow:main"
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.5",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

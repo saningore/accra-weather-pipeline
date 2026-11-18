@@ -1,0 +1,69 @@
+name: Check and deploy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check that local environment files are untracked
+        run: |
+          if git ls-files | grep -E '^\.env(\.|$)'; then
+            echo "Tracked .env files are not allowed." >&2
+            exit 1
+          fi
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.11.17"
+      - run: uv sync --locked
+      - run: uv run --locked ruff check .
+      - run: uv run --locked ruff format --check .
+      - run: uv run --locked pytest
+      - name: Audit dependencies for known vulnerabilities
+        env:
+          RUST_LOG: error
+        run: uv audit --locked --preview-features audit
+
+  deploy:
+    needs: checks
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.11.17"
+      - run: uv sync --locked --no-dev
+      - name: Register this exact commit with Prefect Cloud
+        working-directory: src
+        env:
+          PREFECT_API_URL: ${{ vars.PREFECT_API_URL }}
+          PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+          PREFECT_CODE_REVISION: ${{ github.sha }}
+          ENABLE_PREFECT_DEPLOY: ${{ vars.ENABLE_PREFECT_DEPLOY }}
+        run: |
+          if [ "${ENABLE_PREFECT_DEPLOY}" != "true" ]; then
+            echo "Skipping deploy: set repository variable ENABLE_PREFECT_DEPLOY=true to enable."
+            exit 0
+          fi
+          case "${PREFECT_API_URL}" in
+            https://api.prefect.cloud/api/accounts/*) ;;
+            *)
+              echo "PREFECT_API_URL must be a Prefect Cloud workspace URL." >&2
+              exit 1
+              ;;
+          esac
+          uv run --locked --no-dev prefect deploy --prefect-file ../prefect.yaml --all --no-prompt

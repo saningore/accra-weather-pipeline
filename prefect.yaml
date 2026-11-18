@@ -1,0 +1,52 @@
+# How Prefect Cloud gets and runs this project's code.
+name: accra-weather-pipeline
+
+# Before every run, Prefect clones the exact commit that CI tested and moves into src/.
+pull:
+  - prefect.deployments.steps.git_clone:
+      id: clone
+      repository: https://github.com/saningore/accra-weather-pipeline.git
+      commit_sha: "{{ $PREFECT_CODE_REVISION }}"
+  - prefect.deployments.steps.set_working_directory:
+      directory: "{{ clone.directory }}/src"
+
+deployments:
+  - name: hello
+    entrypoint: accra_weather_pipeline/hello.py:hello_pipeline
+    parameters:
+      name: Prefect Cloud
+    work_pool:
+      name: my-managed-pool
+
+  - name: plan-sketch
+    entrypoint: accra_weather_pipeline/plan_sketch.py:weather_plan_sketch
+    parameters:
+      location: accra
+    work_pool:
+      name: my-managed-pool
+
+  - name: daily-weather
+    version: "{{ $PREFECT_CODE_REVISION }}"
+    description: Load yesterday's weather for Accra into the configured database.
+    entrypoint: accra_weather_pipeline/flow.py:weather_pipeline
+    parameters:
+      location: accra
+      write_bronze: false # Managed container disk disappears after each run.
+      dry_run: false
+      database_secret: accra-weather-database
+    work_pool:
+      name: my-managed-pool
+      job_variables:
+        image: prefecthq/prefect:3-python3.12
+        # Installed before each run. Keep these equal to the versions in uv.lock.
+        pip_packages:
+          - prefect==3.9.3
+          - polars==2.1.0
+          - httpx==0.28.1
+          - python-dotenv==1.2.4
+          - "psycopg[binary]==3.3.9"
+    concurrency_limit: 1
+    schedules:
+      - cron: "30 6 * * *"
+        timezone: UTC
+        active: false
